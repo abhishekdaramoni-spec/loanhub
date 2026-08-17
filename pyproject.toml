@@ -1,0 +1,8 @@
+[tool.ruff]
+line-length = 120
+# Enable Pyflakes (F), pycodestyle (E, W), and McCabe complexity (C90)
+select = ["E", "F", "W", "C90"]
+ignore = []
+
+[tool.ruff.mccabe]
+max-complexity = 15
