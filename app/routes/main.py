@@ -430,5 +430,5 @@ def health():
         from app.models import LoanType
         LoanType.query.limit(1).all()
         return jsonify({'status': 'healthy', 'database': 'connected'}), 200
-    except Exception as e:
+    except Exception:
         return jsonify({'status': 'unhealthy', 'reason': 'database connection failed'}), 500

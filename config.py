@@ -8,6 +8,13 @@ class Config:
 
     # Database Configuration defaults
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_pre_ping': True,
+        'pool_recycle': 280,
+        'pool_size': 10,
+        'max_overflow': 20
+    }
+    SQLITE_FALLBACK_PATH = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'database', 'loansphere.db')
     
     # Uploads Configuration resolved relative to the app/static/uploads folder
     UPLOAD_FOLDER = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'app', 'static', 'uploads')
@@ -33,9 +40,6 @@ class DevelopmentConfig(Config):
     # Fallback to local SQLite database in dev if MySQL credentials are not specified
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
         f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}"
-    
-    # Enable fallback to SQLite database file locally if remote check fails (for development safety)
-    SQLITE_FALLBACK_PATH = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'database', 'loansphere.db')
 
 
 class TestingConfig(Config):

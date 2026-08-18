@@ -23,19 +23,35 @@ def create_app(config_name=None):
         uri = uri.replace('postgres://', 'postgresql://', 1)
         app.config['SQLALCHEMY_DATABASE_URI'] = uri
 
-    # Verify connection to remote MySQL/PostgreSQL, fallback to SQLite if connection fails (only in development)
-    if config_name == 'development' and uri and not uri.startswith('sqlite'):
+    # Verify connection to remote MySQL/PostgreSQL, fallback to SQLite if connection fails or is unset
+    if uri and not uri.startswith('sqlite'):
         from sqlalchemy import create_engine
         try:
-            engine = create_engine(uri)
+            # Use connect_timeout to prevent hanging if remote DB is down
+            engine = create_engine(uri, connect_args={'connect_timeout': 5} if 'mysql' in uri or 'postgresql' in uri else {})
             conn = engine.connect()
             conn.close()
-            print("Connected to remote development database successfully.")
+            print("Connected to remote database successfully.")
         except Exception as e:
-            fallback_db = config_class.SQLITE_FALLBACK_PATH
+            fallback_db = app.config.get('SQLITE_FALLBACK_PATH')
             print(f"Remote check failed ({e}). Falling back to local SQLite: {fallback_db}")
             os.makedirs(os.path.dirname(fallback_db), exist_ok=True)
             app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{fallback_db}"
+    elif not uri:
+        fallback_db = app.config.get('SQLITE_FALLBACK_PATH')
+        print(f"DATABASE_URL is not set. Falling back to local SQLite: {fallback_db}")
+        os.makedirs(os.path.dirname(fallback_db), exist_ok=True)
+        app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{fallback_db}"
+
+    # Clean up SQLite incompatible engine options
+    uri = app.config.get('SQLALCHEMY_DATABASE_URI')
+    if uri and uri.startswith('sqlite'):
+        engine_opts = dict(app.config.get('SQLALCHEMY_ENGINE_OPTIONS', {}))
+        engine_opts.pop('pool_size', None)
+        engine_opts.pop('max_overflow', None)
+        engine_opts.pop('pool_recycle', None)
+        engine_opts.pop('pool_pre_ping', None)
+        app.config['SQLALCHEMY_ENGINE_OPTIONS'] = engine_opts
 
     # Initialize extensions
     db.init_app(app)
