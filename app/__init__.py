@@ -23,25 +23,40 @@ def create_app(config_name=None):
         uri = uri.replace('postgres://', 'postgresql://', 1)
         app.config['SQLALCHEMY_DATABASE_URI'] = uri
 
-    # Verify connection to remote MySQL/PostgreSQL, fallback to SQLite if connection fails or is unset
-    if uri and not uri.startswith('sqlite'):
-        from sqlalchemy import create_engine
-        try:
-            # Use connect_timeout to prevent hanging if remote DB is down
-            engine = create_engine(uri, connect_args={'connect_timeout': 5} if 'mysql' in uri or 'postgresql' in uri else {})
-            conn = engine.connect()
-            conn.close()
-            print("Connected to remote database successfully.")
-        except Exception as e:
+    # Verify connection to remote database
+    if config_name == 'production':
+        if not uri:
+            raise ValueError("DATABASE_URL environment variable is missing or empty in production mode.")
+        if not uri.startswith('sqlite'):
+            from sqlalchemy import create_engine
+            try:
+                # Test connection to production database
+                engine = create_engine(uri, connect_args={'connect_timeout': 5} if 'mysql' in uri or 'postgresql' in uri else {})
+                conn = engine.connect()
+                conn.close()
+                print("Production database connection verified successfully.")
+            except Exception as e:
+                # In production, crash the server rather than silently falling back to SQLite
+                print(f"CRITICAL: Failed to connect to production database: {e}")
+                raise
+    else:
+        if uri and not uri.startswith('sqlite'):
+            from sqlalchemy import create_engine
+            try:
+                engine = create_engine(uri, connect_args={'connect_timeout': 5} if 'mysql' in uri or 'postgresql' in uri else {})
+                conn = engine.connect()
+                conn.close()
+                print("Connected to remote database successfully.")
+            except Exception as e:
+                fallback_db = app.config.get('SQLITE_FALLBACK_PATH')
+                print(f"Remote check failed ({e}). Falling back to local SQLite in development: {fallback_db}")
+                os.makedirs(os.path.dirname(fallback_db), exist_ok=True)
+                app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{fallback_db}"
+        elif not uri:
             fallback_db = app.config.get('SQLITE_FALLBACK_PATH')
-            print(f"Remote check failed ({e}). Falling back to local SQLite: {fallback_db}")
+            print(f"DATABASE_URL is not set. Falling back to local SQLite in development: {fallback_db}")
             os.makedirs(os.path.dirname(fallback_db), exist_ok=True)
             app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{fallback_db}"
-    elif not uri:
-        fallback_db = app.config.get('SQLITE_FALLBACK_PATH')
-        print(f"DATABASE_URL is not set. Falling back to local SQLite: {fallback_db}")
-        os.makedirs(os.path.dirname(fallback_db), exist_ok=True)
-        app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{fallback_db}"
 
     # Clean up SQLite incompatible engine options
     uri = app.config.get('SQLALCHEMY_DATABASE_URI')
